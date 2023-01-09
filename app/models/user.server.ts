@@ -1,62 +1,95 @@
-import type { Password, User } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import bcrypt from 'bcryptjs';
 
-import { prisma } from "~/db.server";
+import { ClientResponseError } from 'pocketbase';
+import { pb } from '~/pocketbase.server';
 
-export type { User } from "@prisma/client";
+export type User = {
+  id: string;
+  email: string;
+};
 
-export async function getUserById(id: User["id"]) {
-  return prisma.user.findUnique({ where: { id } });
+async function authAdmin() {
+  if (
+    process.env.POCKETBASE_ADMIN_EMAIL &&
+    process.env.POCKETBASE_ADMIN_PASSWORD
+  ) {
+    await pb.admins.authWithPassword(
+      process.env.POCKETBASE_ADMIN_EMAIL,
+      process.env.POCKETBASE_ADMIN_PASSWORD
+    );
+  }
 }
 
-export async function getUserByEmail(email: User["email"]) {
-  return prisma.user.findUnique({ where: { email } });
+export async function getUserById(id: User['id']) {
+  try {
+    await authAdmin();
+    const user = await pb.collection('users').getOne(id);
+    return user;
+  } catch (err) {
+    console.log('xz:err', err);
+    return;
+  }
 }
 
-export async function createUser(email: User["email"], password: string) {
-  const hashedPassword = await bcrypt.hash(password, 10);
+export async function getUserByEmail(email: User['email']) {
+  try {
+    await authAdmin();
+    const res = await pb.collection('users').getList(1, 1, {
+      filter: `email = "${email}"`,
+    });
 
-  return prisma.user.create({
-    data: {
+    return res.items[0] || undefined;
+  } catch (err) {
+    // this does not work, i should make a ticket and an mvp for this bug
+    // if (err instanceof ClientResponseError)
+    const error = err as ClientResponseError;
+
+    console.error(error.data);
+    console.error(error.data.data);
+  }
+}
+
+export async function createUser(email: User['email'], password: string) {
+  // const hashedPassword = await bcrypt.hash(password, 10);
+
+  // return prisma.user.create({
+  //   data: {
+  //     email,
+  //     password: {
+  //       create: {
+  //         hash: hashedPassword,
+  //       },
+  //     },
+  //   },
+  // });
+  try {
+    const data = {
       email,
-      password: {
-        create: {
-          hash: hashedPassword,
-        },
-      },
-    },
-  });
+      password,
+      passwordConfirm: password,
+    };
+    return await pb.collection('users').create(data);
+  } catch (err) {
+    // this does not work, i should make a ticket and an mvp for this bug
+    // if (err instanceof ClientResponseError)
+
+    console.error((err as ClientResponseError).data);
+    console.error((err as ClientResponseError).data.data);
+
+    throw err;
+  }
 }
 
-export async function deleteUserByEmail(email: User["email"]) {
-  return prisma.user.delete({ where: { email } });
-}
+// export async function deleteUserByEmail(email: User['email']) {
+//   return prisma.user.delete({ where: { email } });
+// }
 
-export async function verifyLogin(
-  email: User["email"],
-  password: Password["hash"]
-) {
-  const userWithPassword = await prisma.user.findUnique({
-    where: { email },
-    include: {
-      password: true,
-    },
-  });
+export async function authWithPassword(email: User['email'], password: string) {
+  const { record: user, token } = await pb
+    .collection('users')
+    .authWithPassword(email, password);
 
-  if (!userWithPassword || !userWithPassword.password) {
-    return null;
-  }
-
-  const isValid = await bcrypt.compare(
-    password,
-    userWithPassword.password.hash
-  );
-
-  if (!isValid) {
-    return null;
-  }
-
-  const { password: _password, ...userWithoutPassword } = userWithPassword;
-
-  return userWithoutPassword;
+  const cookie = pb.authStore.exportToCookie();
+  console.log('xz:cookie', cookie);
+  return { user, token };
 }

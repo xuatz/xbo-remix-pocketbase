@@ -1,35 +1,47 @@
-import { createCookieSessionStorage, redirect } from "@remix-run/node";
-import invariant from "tiny-invariant";
+import { createCookieSessionStorage, redirect } from '@remix-run/node';
+import invariant from 'tiny-invariant';
+import cookie from 'cookie';
 
-import type { User } from "~/models/user.server";
-import { getUserById } from "~/models/user.server";
+import type { User } from '~/models/user.server';
+import { getUserById } from '~/models/user.server';
+import { pb } from './pocketbase.server';
 
-invariant(process.env.SESSION_SECRET, "SESSION_SECRET must be set");
+invariant(process.env.SESSION_SECRET, 'SESSION_SECRET must be set');
 
 export const sessionStorage = createCookieSessionStorage({
   cookie: {
-    name: "__session",
+    name: '__session',
     httpOnly: true,
-    path: "/",
-    sameSite: "lax",
+    path: '/',
+    sameSite: 'lax',
     secrets: [process.env.SESSION_SECRET],
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === 'production',
   },
 });
 
-const USER_SESSION_KEY = "userId";
+const USER_SESSION_KEY = 'userId';
+const PB_TOKEN = 'token';
 
 export async function getSession(request: Request) {
-  const cookie = request.headers.get("Cookie");
+  const cookie = request.headers.get('Cookie');
   return sessionStorage.getSession(cookie);
 }
 
 export async function getUserId(
   request: Request
-): Promise<User["id"] | undefined> {
+): Promise<User['id'] | undefined> {
   const session = await getSession(request);
   const userId = session.get(USER_SESSION_KEY);
   return userId;
+}
+
+export async function getUserPocketBaseToken(
+  request: Request
+): Promise<User['id'] | undefined> {
+  const session = await getSession(request);
+  console.log('xz:session', session.data);
+  const token = session.get(PB_TOKEN);
+  return token;
 }
 
 export async function getUser(request: Request) {
@@ -48,7 +60,7 @@ export async function requireUserId(
 ) {
   const userId = await getUserId(request);
   if (!userId) {
-    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
+    const searchParams = new URLSearchParams([['redirectTo', redirectTo]]);
     throw redirect(`/login?${searchParams}`);
   }
   return userId;
@@ -76,22 +88,33 @@ export async function createUserSession({
 }) {
   const session = await getSession(request);
   session.set(USER_SESSION_KEY, userId);
+
+  const exportedCookie = pb.authStore.exportToCookie();
+
+  console.log('xz:redirectTo', redirectTo);
+
   return redirect(redirectTo, {
-    headers: {
-      "Set-Cookie": await sessionStorage.commitSession(session, {
-        maxAge: remember
-          ? 60 * 60 * 24 * 7 // 7 days
-          : undefined,
-      }),
-    },
+    headers: [
+      [
+        'Set-Cookie',
+        await sessionStorage.commitSession(session, {
+          maxAge: remember
+            ? 60 * 60 * 24 * 7 // 7 days
+            : undefined,
+        }),
+      ],
+      ['Set-Cookie', exportedCookie],
+    ],
   });
 }
 
 export async function logout(request: Request) {
   const session = await getSession(request);
-  return redirect("/", {
-    headers: {
-      "Set-Cookie": await sessionStorage.destroySession(session),
-    },
+  return redirect('/', {
+    headers: [
+      ['Set-Cookie', await sessionStorage.destroySession(session)],
+      // TODO i should stop hardcoding `pb_auth=;` one day
+      ['Set-Cookie', 'pb_auth=;expires=Thu, 01 Jan 1970 00:00:00 GMT'],
+    ],
   });
 }
