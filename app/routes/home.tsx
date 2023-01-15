@@ -2,7 +2,7 @@ import { Link } from '@remix-run/react';
 
 export default function HomePage() {
   return (
-    <div className="flex flex-col justify-center min-h-full">
+    <div className="flex min-h-full flex-col justify-center">
       nothing here but chicken
       <Link
         className="text-blue-500 underline"
@@ -11,14 +11,6 @@ export default function HomePage() {
         }}
       >
         Log in
-      </Link>
-      <Link
-        className="text-blue-500 underline"
-        to={{
-          pathname: '/raichu',
-        }}
-      >
-        raichu
       </Link>
       <form action="/logout" method="post">
         <button type="submit" className="button">

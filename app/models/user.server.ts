@@ -1,6 +1,4 @@
-import bcrypt from 'bcryptjs';
-
-import { ClientResponseError } from 'pocketbase';
+import type { ClientResponseError } from 'pocketbase';
 import { pb } from '~/pocketbase.server';
 
 export type User = {
@@ -23,8 +21,10 @@ async function authAdmin() {
 export async function getUserById(id: User['id']) {
   try {
     await authAdmin();
-    const user = await pb.collection('users').getOne(id);
-    return user;
+    const res = await pb.collection('users').getList(1, 1, {
+      filter: `id = "${id}"`,
+    });
+    return res.items[0] || undefined;
   } catch (err) {
     console.log('xz:err', err);
     return;
@@ -40,28 +40,18 @@ export async function getUserByEmail(email: User['email']) {
 
     return res.items[0] || undefined;
   } catch (err) {
-    // this does not work, i should make a ticket and an mvp for this bug
+    // TODO this does not work, i should make a ticket and an mvp for this bug
     // if (err instanceof ClientResponseError)
-    const error = err as ClientResponseError;
 
+    const error = err as ClientResponseError;
     console.error(error.data);
     console.error(error.data.data);
+
+    throw err;
   }
 }
 
 export async function createUser(email: User['email'], password: string) {
-  // const hashedPassword = await bcrypt.hash(password, 10);
-
-  // return prisma.user.create({
-  //   data: {
-  //     email,
-  //     password: {
-  //       create: {
-  //         hash: hashedPassword,
-  //       },
-  //     },
-  //   },
-  // });
   try {
     const data = {
       email,
@@ -70,26 +60,20 @@ export async function createUser(email: User['email'], password: string) {
     };
     return await pb.collection('users').create(data);
   } catch (err) {
-    // this does not work, i should make a ticket and an mvp for this bug
+    // TODO this does not work, i should make a ticket and an mvp for this bug
     // if (err instanceof ClientResponseError)
 
-    console.error((err as ClientResponseError).data);
-    console.error((err as ClientResponseError).data.data);
+    const error = err as ClientResponseError;
+    console.error(error.data);
+    console.error(error.data.data);
 
     throw err;
   }
 }
 
-// export async function deleteUserByEmail(email: User['email']) {
-//   return prisma.user.delete({ where: { email } });
-// }
-
 export async function authWithPassword(email: User['email'], password: string) {
   const { record: user, token } = await pb
     .collection('users')
     .authWithPassword(email, password);
-
-  const cookie = pb.authStore.exportToCookie();
-  console.log('xz:cookie', cookie);
   return { user, token };
 }

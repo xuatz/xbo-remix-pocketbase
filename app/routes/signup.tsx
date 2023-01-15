@@ -3,7 +3,7 @@ import { json, redirect } from '@remix-run/node';
 import { Form, Link, useActionData, useSearchParams } from '@remix-run/react';
 import { useEffect, useRef } from 'react';
 
-import { getUserId, createUserSession } from '~/session.server';
+import { getUserId } from '~/session.server';
 
 import { createUser, getUserByEmail } from '~/models/user.server';
 import { safeRedirect, validateEmail } from '~/utils';
@@ -19,7 +19,6 @@ export async function action({ request }: ActionArgs) {
   const email = formData.get('email');
   const password = formData.get('password');
   const redirectTo = safeRedirect(formData.get('redirectTo'), '/login');
-  console.log('xz:redirectTo', redirectTo);
 
   if (!validateEmail(email)) {
     return json(
@@ -55,9 +54,10 @@ export async function action({ request }: ActionArgs) {
     );
   }
 
-  const newUser = await createUser(email, password);
+  const _newUser = await createUser(email, password);
   // TODO i actually can't persist the cookie at this point of time
   // so for now, lets redirect to /login
+  // return createUserSession({ ... })
 
   return redirect(redirectTo);
 }
@@ -84,8 +84,8 @@ export default function SignupPage() {
   }, [actionData]);
 
   return (
-    <div className="flex flex-col justify-center min-h-full">
-      <div className="w-full max-w-md px-8 mx-auto">
+    <div className="flex min-h-full flex-col justify-center">
+      <div className="mx-auto w-full max-w-md px-8">
         <Form method="post" className="space-y-6">
           <div>
             <label
@@ -105,7 +105,7 @@ export default function SignupPage() {
                 autoComplete="email"
                 aria-invalid={actionData?.errors?.email ? true : undefined}
                 aria-describedby="email-error"
-                className="w-full px-2 py-1 text-lg border border-gray-500 rounded"
+                className="w-full rounded border border-gray-500 px-2 py-1 text-lg"
               />
               {actionData?.errors?.email && (
                 <div className="pt-1 text-red-700" id="email-error">
@@ -131,7 +131,7 @@ export default function SignupPage() {
                 autoComplete="new-password"
                 aria-invalid={actionData?.errors?.password ? true : undefined}
                 aria-describedby="password-error"
-                className="w-full px-2 py-1 text-lg border border-gray-500 rounded"
+                className="w-full rounded border border-gray-500 px-2 py-1 text-lg"
               />
               {actionData?.errors?.password && (
                 <div className="pt-1 text-red-700" id="password-error">
@@ -144,12 +144,12 @@ export default function SignupPage() {
           <input type="hidden" name="redirectTo" value={redirectTo} />
           <button
             type="submit"
-            className="w-full px-4 py-2 text-white bg-blue-500 rounded hover:bg-blue-600 focus:bg-blue-400"
+            className="w-full rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 focus:bg-blue-400"
           >
             Create Account
           </button>
           <div className="flex items-center justify-center">
-            <div className="text-sm text-center text-gray-500">
+            <div className="text-center text-sm text-gray-500">
               Already have an account?{' '}
               <Link
                 className="text-blue-500 underline"
