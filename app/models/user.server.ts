@@ -6,25 +6,35 @@ export type User = {
   email: string;
 };
 
-async function authAdmin() {
+async function sudo(task: Function) {
+  console.log('xz:sudo:task', task);
   if (
-    process.env.POCKETBASE_ADMIN_EMAIL &&
-    process.env.POCKETBASE_ADMIN_PASSWORD
+    !process.env.POCKETBASE_ADMIN_EMAIL ||
+    !process.env.POCKETBASE_ADMIN_PASSWORD
   ) {
-    await pb.admins.authWithPassword(
-      process.env.POCKETBASE_ADMIN_EMAIL,
-      process.env.POCKETBASE_ADMIN_PASSWORD
-    );
+    throw new Error('admin credentials missing');
   }
+
+  await pb.admins.authWithPassword(
+    process.env.POCKETBASE_ADMIN_EMAIL,
+    process.env.POCKETBASE_ADMIN_PASSWORD
+  );
+
+  const res = await task();
+
+  pb.authStore.clear();
+
+  return res;
 }
 
 export async function getUserById(id: User['id']) {
   try {
-    await authAdmin();
-    const res = await pb.collection('users').getList(1, 1, {
-      filter: `id = "${id}"`,
+    const res: { items: User[] } = await sudo(async () => {
+      return await pb.collection('users').getList(1, 1, {
+        filter: `id = "${id}"`,
+      });
     });
-    return res.items[0] || undefined;
+    return res?.items[0] || undefined;
   } catch (err) {
     console.log('xz:err', err);
     return;
@@ -33,12 +43,12 @@ export async function getUserById(id: User['id']) {
 
 export async function getUserByEmail(email: User['email']) {
   try {
-    await authAdmin();
-    const res = await pb.collection('users').getList(1, 1, {
-      filter: `email = "${email}"`,
+    const res: { items: User[] } = await sudo(async () => {
+      return await pb.collection('users').getList(1, 1, {
+        filter: `email = "${email}"`,
+      });
     });
-
-    return res.items[0] || undefined;
+    return res?.items[0] || undefined;
   } catch (err) {
     // TODO this does not work, i should make a ticket and an mvp for this bug
     // if (err instanceof ClientResponseError)
